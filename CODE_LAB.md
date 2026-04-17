@@ -107,10 +107,10 @@ python app.py
 
 | Feature | Basic | Advanced | Tại sao quan trọng? |
 |---------|-------|----------|---------------------|
-| Config | Hardcode | Env vars | ... |
-| Health check |  |  | ... |
-| Logging | print() | JSON | ... |
-| Shutdown | Đột ngột | Graceful | ... |
+| Config | Hardcode secrets/port/debug trong code | Config tập trung từ env vars (`settings`) | Tránh lộ secrets, dễ đổi môi trường dev/staging/prod, cloud inject config thuận tiện |
+| Health check | Không có endpoint kiểm tra | Có `/health` (liveness) và `/ready` (readiness) | Platform/load balancer biết khi nào restart instance và khi nào route traffic |
+| Logging | `print()` thủ công, có thể log nhạy cảm | Structured JSON logging bằng `logging` | Dễ truy vết trên log systems (ELK/Loki/Datadog), hỗ trợ quan sát và audit tốt hơn |
+| Shutdown | Tắt đột ngột, không có lifecycle rõ ràng | Graceful shutdown với lifespan + SIGTERM handler | Hoàn tất request đang xử lý, giảm mất dữ liệu/lỗi khi deploy hoặc scale |
 
 ###  Checkpoint 1
 
@@ -344,7 +344,7 @@ cd ../../04-api-gateway/develop
 
 Test:
 ```bash
-python app.py
+AGENT_API_KEY=my-secret-key python app.py
 
 #  Không có key
 curl http://localhost:8000/ask -X POST \
@@ -353,9 +353,12 @@ curl http://localhost:8000/ask -X POST \
 
 #  Có key
 curl http://localhost:8000/ask -X POST \
-  -H "X-API-Key: secret-key-123" \
+  -H "X-API-Key: my-secret-key" \
   -H "Content-Type: application/json" \
   -d '{"question": "Hello"}'
+
+# PowerShell (Windows)
+$env:AGENT_API_KEY="my-secret-key"; python app.py
 ```
 
 ###  Exercise 4.2: JWT authentication (Advanced)
@@ -372,7 +375,15 @@ python app.py
 
 curl http://localhost:8000/token -X POST \
   -H "Content-Type: application/json" \
-  -d '{"username": "admin", "password": "secret"}'
+  -d '{"username": "student", "password": "demo123"}'
+```
+
+Lưu ý: endpoint đúng là `/auth/token`.
+
+```bash
+curl http://localhost:8000/auth/token -X POST \
+  -H "Content-Type: application/json" \
+  -d '{"username": "student", "password": "demo123"}'
 ```
 
 3. Dùng token để gọi API:
@@ -401,6 +412,14 @@ for i in {1..20}; do
     -d '{"question": "Test '$i'"}'
   echo ""
 done
+
+# PowerShell (Windows)
+for ($i=1; $i -le 20; $i++) {
+  curl http://localhost:8000/ask -X POST `
+    -H "Authorization: Bearer $TOKEN" `
+    -H "Content-Type: application/json" `
+    -d "{\"question\": \"Test $i\"}"
+}
 ```
 
 Quan sát response khi hit limit.
