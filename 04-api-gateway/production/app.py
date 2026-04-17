@@ -141,14 +141,28 @@ async def ask_agent(
     limiter = rate_limiter_admin if role == "admin" else rate_limiter_user
     rate_info = limiter.check(username)
 
-    # ✅ Cost check trước khi gọi LLM
-    cost_guard.check_budget(username)
+    # ✅ Cost check trước khi gọi LLM (ước lượng chi phí request)
+    estimated_input_tokens = len(body.question.split()) * 2
+    estimated_output_tokens = 60  # mock estimate cho câu trả lời ngắn
+    estimated_cost = (
+        estimated_input_tokens / 1000 * 0.00015
+        + estimated_output_tokens / 1000 * 0.0006
+    )
+    if not cost_guard.check_budget(username, estimated_cost):
+        raise HTTPException(
+            status_code=402,
+            detail={
+                "error": "Monthly budget exceeded",
+                "budget_usd": cost_guard.monthly_budget_usd,
+                "resets": "start of next month (UTC)",
+            },
+        )
 
     # Gọi LLM (mock)
     response_text = ask(body.question)
 
     # ✅ Ghi nhận usage (mock token count)
-    input_tokens = len(body.question.split()) * 2
+    input_tokens = estimated_input_tokens
     output_tokens = len(response_text.split()) * 2
     usage = cost_guard.record_usage(username, input_tokens, output_tokens)
 
